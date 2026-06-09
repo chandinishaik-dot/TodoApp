@@ -5,38 +5,56 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.todoapp.data.TodoDatabase
+import com.example.todoapp.data.TodoEntity
+import com.example.todoapp.repository.TodoRepository
 import com.example.todoapp.ui.theme.TodoAppTheme
+import com.example.todoapp.viewmodel.TodoViewModel
+import com.example.todoapp.viewmodel.TodoViewModelFactory
 
 class MainActivity : ComponentActivity() {
+    @ExperimentalMaterial3Api
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         setContent {
             TodoAppTheme {
-
-                val todoItemList = remember {
-                    mutableStateListOf(
-                        TodoItem(
-                            id = 1L,
-                            todoTitle = "Task 1"
-                        )
-                    )
-                }
-
                 var showAddTodoDialog by remember {
                     mutableStateOf(false)
                 }
@@ -49,8 +67,22 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf("")
                 }
 
+                val database = remember {
+                    TodoDatabase.getDatabase(applicationContext)
+                }
+
+                val repository = remember {
+                    TodoRepository(database.todoDao())
+                }
+
+                val viewModel: TodoViewModel = viewModel (
+                    factory = TodoViewModelFactory(repository)
+                )
+
+                val todoItemList by viewModel.todos.collectAsStateWithLifecycle()
+
                 var selectedTodoItem by remember {
-                    mutableStateOf<TodoItem?>(null)
+                    mutableStateOf<TodoEntity?>(null)
                 }
 
                 Scaffold(
@@ -70,7 +102,24 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 ) { innerPadding ->
+                    Column (
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                    ) {
 
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(60.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Todo App",
+                                style = MaterialTheme.typography.headlineSmall
+                            )
+                        }
+                    }
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
@@ -95,17 +144,11 @@ class MainActivity : ComponentActivity() {
                                     Checkbox(
                                         checked = item.isCompleted,
                                         onCheckedChange = { newValue ->
-                                            val updatedItem =
-                                                item.copy(isCompleted = newValue)
-
-                                            val itemIndex =
-                                                todoItemList.indexOfFirst {
-                                                    it.id == item.id
-                                                }
-
-                                            if (itemIndex != -1) {
-                                                todoItemList[itemIndex] = updatedItem
-                                            }
+                                            viewModel.updateTodo(
+                                                item.copy(
+                                                    isCompleted = newValue
+                                                )
+                                            )
                                         }
                                     )
 
@@ -150,12 +193,7 @@ class MainActivity : ComponentActivity() {
                             onAddClicked = {
 
                                 if (todoTitle.isNotBlank()) {
-                                    todoItemList.add(
-                                        TodoItem(
-                                            id = System.currentTimeMillis(),
-                                            todoTitle = todoTitle
-                                        )
-                                    )
+                                    viewModel.addTodo(todoTitle)
                                 }
 
                                 showAddTodoDialog = false
@@ -165,18 +203,11 @@ class MainActivity : ComponentActivity() {
                             onEditClicked = {
 
                                 selectedTodoItem?.let { todoItem ->
-
-                                    val updatedItem =
-                                        todoItem.copy(todoTitle = todoTitle)
-
-                                    val itemIndex =
-                                        todoItemList.indexOfFirst {
-                                            it.id == todoItem.id
-                                        }
-
-                                    if (itemIndex != -1) {
-                                        todoItemList[itemIndex] = updatedItem
-                                    }
+                                    viewModel.updateTodo(
+                                        todoItem.copy(
+                                            todoTitle = todoTitle
+                                        )
+                                    )
                                 }
 
                                 showAddTodoDialog = false
@@ -198,15 +229,7 @@ class MainActivity : ComponentActivity() {
                             onDeleteClicked = {
 
                                 selectedTodoItem?.let { todoItem ->
-
-                                    val itemIndex =
-                                        todoItemList.indexOfFirst {
-                                            it.id == todoItem.id
-                                        }
-
-                                    if (itemIndex != -1) {
-                                        todoItemList.removeAt(itemIndex)
-                                    }
+                                    viewModel.deleteTodo(todoItem)
                                 }
 
                                 showDeleteTodoDialog = false
